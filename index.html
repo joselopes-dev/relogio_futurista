@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D3 Visualization</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      display: flex;
+      justify-content: center; /* Centraliza horizontalmente */
+      align-items: center;     /* Centraliza verticalmente */
+      background-color: black;
+    }
+    #chart {
+      width: 300px;
+      height: 300px;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="chart"></div>
+
+  <script>
+    // Definindo locale para o português
+    const locale = d3.timeFormatLocale({
+      "dateTime": "%A, %e de %B de %Y. %X",
+      "date": "%d/%m/%Y",
+      "time": "%H:%M:%S",
+      "periods": ["AM", "PM"],
+      "days": ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"],
+      "shortDays": ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"],
+      "months": ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
+      "shortMonths": ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    });
+
+    function chart() {
+      const width = 500;  
+      const height = 500; 
+      const radius = width / 1.70;
+      const armRadius = radius / 19;
+      const dotRadius = armRadius - 5;
+      const color = d3.scaleSequential([0, 2 * Math.PI], d3.interpolateRainbow);
+
+      const arcArm = d3.arc()
+        .startAngle(d => armRadius / d.radius)
+        .endAngle(d => -Math.PI - armRadius / d.radius)
+        .innerRadius(d => d.radius - armRadius)
+        .outerRadius(d => d.radius + armRadius)
+        .cornerRadius(armRadius);
+
+      // Usando a configuração do locale para formatar os textos
+      const fields = [
+        {radius: 0.2 * radius, interval: d3.timeYear,   subinterval: d3.timeMonth,  format: locale.format("%b")},
+        {radius: 0.3 * radius, interval: d3.timeMonth,  subinterval: d3.timeDay,    format: locale.format("%d")},
+        {radius: 0.4 * radius, interval: d3.timeWeek,   subinterval: d3.timeDay,    format: locale.format("%a")},
+        {radius: 0.6 * radius, interval: d3.timeDay,    subinterval: d3.timeHour,   format: locale.format("%H")},
+        {radius: 0.7 * radius, interval: d3.timeHour,   subinterval: d3.timeMinute, format: locale.format("%M")},
+        {radius: 0.8 * radius, interval: d3.timeMinute, subinterval: d3.timeSecond, format: locale.format("%S")}
+      ];
+
+      const svg = d3.create("svg")
+        .attr("viewBox", [0, 0, width, height])
+        .attr("text-anchor", "middle")
+        .style("font", "300 10px var(--sans-serif)");
+
+      const field = svg.append("g")
+        .attr("transform", `translate(${width / 2},${height / 2})`)
+        .selectAll("g")
+        .data(fields)
+        .join("g");
+
+      field.append("circle")
+        .attr("fill", "none")
+        .attr("stroke", "currentColor")
+        .attr("stroke-width", 1.5)
+        .attr("r", d => d.radius);
+
+      const fieldTick = field.selectAll("g")
+        .data(d => {
+          const date = d.interval(new Date(2000, 0, 1));
+          d.range = d.subinterval.range(date, d.interval.offset(date, 1));
+          return d.range.map(t => ({time: t, field: d}));
+        })
+        .join("g")
+        .attr("class", "field-tick")
+        .attr("transform", (d, i) => {
+          const angle = i / d.field.range.length * 2 * Math.PI - Math.PI / 2;
+          return `translate(${Math.cos(angle) * d.field.radius},${Math.sin(angle) * d.field.radius})`;
+        });
+
+      const fieldCircle = fieldTick.append("circle")
+        .attr("r", dotRadius)
+        .attr("fill", "white")
+        .style("color", (d, i) => color(i / d.field.range.length * 2 * Math.PI))
+        .style("transition", "fill 750ms ease-out");
+
+      fieldTick.append("text")
+        .attr("dy", "0.35em")
+        .attr("fill", "#222")
+        .text(d => d.field.format(d.time).slice(0, 2));
+
+      const fieldFocus = field.append("circle")
+        .attr("r", dotRadius)
+        .attr("fill", "none")
+        .attr("stroke", "#000")
+        .attr("stroke-width", 3)
+        .attr("cy", d => -d.radius)
+        .style("transition", "transform 500ms ease");
+
+      setInterval(() => {
+        const now = Math.floor((Date.now() + 1) / 1000) * 1000;
+        update(now);
+      }, 1000);
+
+      function update(then) {
+        for (const d of fields) {
+          const start = d.interval(then);
+          const index = d.subinterval.count(start, then);
+          d.cycle = (d.cycle || 0) + (index < d.index);
+          d.index = index;
+        }
+
+        fieldCircle.attr("fill", (d, i) => i === d.field.index ? "currentColor" : "white");
+        fieldFocus.attr("transform", d => `rotate(${(d.index / d.range.length + d.cycle) * 360})`);
+      }
+
+      document.getElementById("chart").appendChild(svg.node());
+    }
+
+    chart();
+  </script>
+</body>
+</html>
